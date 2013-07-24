@@ -100,6 +100,7 @@ def _label_with_points(cube, result=None, ndims=2, coords=None):
 def _get_titles(u_object, v_object):
     if u_object is None:
         u_object = iplt._u_object_from_v_object(v_object)
+        u_object, v_object = iplt._switch_axes(u_object, v_object)
     xunits = u_object is not None and not u_object.units.is_time_reference()
     yunits = not v_object.units.is_time_reference()
     xlabel = _title(u_object, with_units=xunits)

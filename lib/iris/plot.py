@@ -340,6 +340,17 @@ def _u_object_from_v_object(v_object):
     return u_object
 
 
+def _switch_axes(u_object, v_object):
+    try:
+        axis = iris.util.guess_coord_axis(u_object)
+    except AttributeError:
+        axis = None
+    if axis == 'Z':
+        # the only coord is vertical, so switch it to the y-axis
+        u_object, v_object = v_object, u_object
+    return u_object, v_object
+
+
 def _get_plot_objects(args):
     if len(args) > 1 and isinstance(args[1],
                                     (iris.cube.Cube, iris.coords.Coord)):
@@ -356,7 +367,8 @@ def _get_plot_objects(args):
         # single argument
         v_object = args[0]
         u_object = _u_object_from_v_object(v_object)
-        u, v = _uv_from_u_object_v_object(u_object, args[0])
+        u_object, v_object = _switch_axes(u_object, v_object)
+        u, v = _uv_from_u_object_v_object(u_object, v_object)
         args = args[1:]
     return u_object, v_object, u, v, args
 
