@@ -76,7 +76,14 @@ class TestLoadSave(tests.IrisTest):
         #       long [iDirectionIncrement]: [109994] != [109993]
         #       Consider the change in dx_dy() to "InDegrees" too.
         self.save_and_compare(source_grib, reference_text)
-    
+
+    def test_regular_gg(self):
+        source_grib = tests.get_data_path(
+            ("GRIB", "gaussian", "regular_gg.grib2"))
+        reference_text = tests.get_result_path(
+            ("grib_save", "regular_gg.grib_compare.txt"))
+        self.save_and_compare(source_grib, reference_text)
+
 # XXX Addressed in #1118 pending #1039 for hybrid levels
 #    def test_hybrid_pressure_levels(self):
 #        source_grib = tests.get_data_path(("GRIB", "ecmwf_standard", "t0.grib2"))

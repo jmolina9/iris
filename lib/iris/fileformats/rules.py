@@ -262,6 +262,58 @@ def regular_step(coord):
     return avdiff.astype(coord.points.dtype)
 
 
+def _single_arg_fast_cache(func):
+    class MemoryDict(dict):
+        def __missing__(self, key):
+            result = self[key] = func(key)
+            return result
+    return MemoryDict().__getitem__
+
+
+@_single_arg_fast_cache
+def _gaussian_latitudes(n):
+    """
+    Computes Gaussian latitudes for a given number of parallels.
+
+    Gaussian latitudes are the latitudes where:
+
+    .. math::
+
+       P_N^0 ( \mu ) = 0
+
+    where :math:`P_N^0` is the associated Legendre polynomial of degree
+    :math:`N` and order 0, with :math:`N` the number of latitudes and
+    :math:`\mu = \sin (phi)` is the sine of latitude.
+
+    This calculation can be quite time consuming so this function makes
+    use of caching to try and maximize performance.
+
+    This function has been tested for Gaussian grid sizes up to N1024
+    (2048 Gaussian latitude points) corresponding to triangular spectral
+    truncation of T2047 (which is very large by 2013 standards!).
+
+    """
+    cs = np.array([0] * int(n) + [1], dtype=np.int64)
+    roots = np.polynomial.legendre.legroots(cs)
+    latitudes = np.rad2deg(np.arcsin(roots))
+    return latitudes
+
+
+def is_gaussian(y_coord):
+    """Determine if coordinate values represent Gaussian latitudes."""
+    if y_coord.ndim != 1:
+        # Gaussian latitudes will be 1D.
+        return False
+    reference_points = _gaussian_latitudes(y_coord.shape[0])
+    # Reference latitudes are generated south-to-north, might need to
+    # switch the order of our coord for comparison.
+    if y_coord.points[0] > y_coord.points[1]:
+        y_points = y_coord.points[::-1]
+    else:
+        y_points = y_coord.points
+    return np.allclose(y_points, reference_points)
+
+
 def calculate_forecast_period(time, forecast_reference_time):
     """
     Return the forecast period in hours derived from time and

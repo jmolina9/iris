@@ -24,7 +24,7 @@ import numpy.ma as ma
 
 import iris
 import iris.unit
-from iris.fileformats.rules import is_regular, regular_step
+from iris.fileformats.rules import is_regular, regular_step, is_gaussian
 from iris.fileformats.grib import grib_phenom_translation as gptx
 
 
@@ -42,7 +42,8 @@ def gribbability_check(cube):
     # Regular?
     y_coord = cube.coord(dimensions=[0])
     x_coord = cube.coord(dimensions=[1])
-    if not is_regular(x_coord) or not is_regular(y_coord):
+    if not is_regular(x_coord) or \
+            (not is_regular(y_coord) and not is_gaussian(y_coord)):
         raise iris.exceptions.TranslationError(
             "Cannot save irregular grids to grib")
 
@@ -130,6 +131,14 @@ def dx_dy(x_coord, y_coord, grib):
     gribapi.grib_set_double(grib, "DyInDegrees", float(abs(y_step)))
 
 
+def dx_parallels(x_coord, y_coord, grib):
+    x_step = regular_step(x_coord)
+    gribapi.grib_set_double(grib, "iDirectionIncrementInDegrees",
+                            float(abs(x_step)))
+    n = y_coord.shape[0] // 2
+    gribapi.grib_set_long(grib, 'N', n)
+
+
 def scanning_mode_flags(x_coord, y_coord, grib):
     gribapi.grib_set_long(grib, "iScansPositively",
                           int(x_coord.points[1] - x_coord.points[0] > 0))
@@ -144,6 +153,17 @@ def latlon_common(cube, grib):
     grid_dims(x_coord, y_coord, grib)
     latlon_first_last(x_coord, y_coord, grib)
     dx_dy(x_coord, y_coord, grib)
+    scanning_mode_flags(x_coord, y_coord, grib)
+
+
+def gaussian_common(cube, grib):
+    y_coord = cube.coord(dimensions=[0])
+    x_coord = cube.coord(dimensions=[1])
+
+    shape_of_the_earth(cube, grib)
+    grid_dims(x_coord, y_coord, grib)
+    latlon_first_last(x_coord, y_coord, grib)
+    dx_parallels(x_coord, y_coord, grib)
     scanning_mode_flags(x_coord, y_coord, grib)
 
 
@@ -167,10 +187,15 @@ def rotated_pole(cube, grib):
 def grid_template(cube, grib):
     cs = cube.coord(dimensions=[0]).coord_system
     if isinstance(cs, iris.coord_systems.GeogCS):
-        # template 3.0
-        gribapi.grib_set_long(grib, "gridDefinitionTemplateNumber", 0)
-        latlon_common(cube, grib)
-
+        y_coord = cube.coord(dimensions=[0])
+        if is_gaussian(y_coord):
+            # regular gaussian latitude/longitude grid (regular_gg)
+            gribapi.grib_set_long(grib, "gridDefinitionTemplateNumber", 40)
+            gaussian_common(cube, grib)
+        else:
+            # regular latitude/longitude grid (regular_ll)
+            gribapi.grib_set_long(grib, "gridDefinitionTemplateNumber", 0)
+            latlon_common(cube, grib)
     # rotated
     elif isinstance(cs, iris.coord_systems.RotatedGeogCS):
         # template 3.1

@@ -1,0 +1,27 @@
+
+-- GRIB #1 -- shortName=gh paramId=156 stepRange=69 levelType=pl level=525 packingType=grid_simple gridType=regular_gg --
+long [totalLength]: [37043] != [55480]
+long [numberOfSection] 5 out of 6 different
+string [centre]: [kwbc] != [egrr]
+long [tablesVersion]: [2] != [4]
+long [localTablesVersion]: [1] != [0]
+long [productionStatusOfProcessedData]: [0] != [255]
+string [typeOfProcessedData]: [fc] != [af]
+long [numberOfSection] 5 out of 6 different
+long [shapeOfTheEarth]: [6] != [1]
+scaleFactorOfRadiusOfSphericalEarth is set to missing in 1st field is not missing in 2nd field
+scaledValueOfRadiusOfSphericalEarth is set to missing in 1st field is not missing in 2nd field
+long [latitudeOfFirstGridPoint]: [88572169] != [88572168]
+long [latitudeOfLastGridPoint]: [-88572169] != [-88572168]
+long [numberOfSection] 5 out of 6 different
+long [typeOfGeneratingProcess]: [2] != [255]
+long [backgroundProcess]: [0] != [255]
+long [generatingProcessIdentifier]: [96] != [255]
+scaleFactorOfSecondFixedSurface is set to missing in 2nd field is not missing in 1st field
+scaledValueOfSecondFixedSurface is set to missing in 2nd field is not missing in 1st field
+long [numberOfSection] 5 out of 6 different
+long [binaryScaleFactor]: [-5] != [-13]
+long [bitsPerValue]: [16] != [24]
+long [numberOfSection] 5 out of 6 different
+long [section7Length]: [36869] != [55301]
+long [numberOfSection] 5 out of 6 different
