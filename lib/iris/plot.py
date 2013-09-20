@@ -288,29 +288,7 @@ def _draw_2d_from_points(draw_method_name, arg_func, cube, *args, **kwargs):
             data = data.T
 
         # Obtain U and V coordinates
-        v_coord, u_coord = plot_defn.coords
-        if u_coord:
-            u = u_coord.points
-            u = _fixup_dates(u_coord, u)
-        else:
-            u = np.arange(data.shape[1])
-        if v_coord:
-            v = v_coord.points
-            v = _fixup_dates(v_coord, v)
-        else:
-            v = np.arange(data.shape[0])
-
-        if plot_defn.transpose:
-            u = u.T
-            v = v.T
-
-        if u.dtype == np.dtype(object) and isinstance(u[0], datetime.datetime):
-            u = mpl_dates.date2num(u)
-
-        if v.dtype == np.dtype(object) and isinstance(v[0], datetime.datetime):
-            v = mpl_dates.date2num(v)
-
-        u, v = _broadcast_2d(u, v)
+        u, v = _coord_values_2d_common(plot_defn, data.shape)
 
         draw_method = getattr(plt, draw_method_name)
         if arg_func is not None:
@@ -320,7 +298,47 @@ def _draw_2d_from_points(draw_method_name, arg_func, cube, *args, **kwargs):
             result = draw_method(u, v, data, *args, **kwargs)
 
         # Invert y-axis if necessary.
+        v_coord, u_coord = plot_defn.coords
         _invert_yaxis(v_coord)
+
+    return result
+
+
+def _draw_2d_vector(draw_method_name, arg_func, ucube, vcube, *args, **kwargs):
+    """Draw a vector quantity."""
+    if ucube.shape != vcube.shape:
+        raise ValueError('Component cubes are not compatible.')
+    mode = iris.coords.POINT_MODE
+    coords = kwargs.pop('coords', None)
+    if coords is not None:
+        plot_defn = _get_plot_defn_custom_coords_picked(ucube, coords, mode)
+    else:
+        plot_defn = _get_plot_defn(ucube, mode, ndims=2)
+
+    if _can_draw_map(plot_defn.coords):
+        result = _vector_map_common(draw_method_name, arg_func, mode, ucube,
+                                    vcube, plot_defn, *args, **kwargs)
+    else:
+        # Obtain data arrays.
+        udata = ucube.data
+        vdata = vcube.data
+        if plot_defn.transpose:
+            udata = udata.T
+            vdata = vdata.T
+
+        # Obtain X and Y coordinates
+        x, y = _coord_values_2d_common(plot_defn, udata.shape)
+
+        draw_method = getattr(plt, draw_method_name)
+        if arg_func is not None:
+            args, kwargs = arg_func(x, y, udata, vdata, *args, **kwargs)
+            result = draw_method(*args, **kwargs)
+        else:
+            result = draw_method(x, y, udata, vdata, *args, **kwargs)
+
+        # Invert y-axis if necessary.
+        y_coord, x_coord = plot_defn.coords
+        _invert_yaxis(y_coord)
 
     return result
 
@@ -424,6 +442,34 @@ def _draw_1d_from_points(draw_method_name, arg_func, *args, **kwargs):
     return result
 
 
+def _coord_values_2d_common(plot_defn, data_shape):
+    """
+    Get the values of coordinates for a 2d plot.
+
+    This includes special handling of time coordinates (to work-around
+    a matplotlib bug) and returning 2d coordinate arrays.
+
+    """
+    v_coord, u_coord = plot_defn.coords
+    if u_coord:
+        u = _data_from_coord_or_cube(u_coord)
+    else:
+        u = np.arange(data_shape[1])
+    if v_coord:
+        v = _data_from_coord_or_cube(v_coord)
+    else:
+        v = np.arange(data_shape[0])
+    if plot_defn.transpose:
+        u = u.T
+        v = v.T
+    if u.dtype == np.dtype(object) and isinstance(u[0], datetime.datetime):
+        u = mpl_dates.date2num(u)
+    if v.dtype == np.dtype(object) and isinstance(v[0], datetime.datetime):
+        v = mpl_dates.date2num(v)
+    u, v = _broadcast_2d(u, v)
+    return u, v
+
+
 def _get_cartopy_axes(cartopy_proj):
     # Replace non-cartopy subplot/axes with a cartopy alternative.
     ax = plt.gca()
@@ -473,16 +519,8 @@ def _geoaxes_draw_method_and_kwargs(x_coord, y_coord, draw_method_name,
     return draw_method, new_kwargs
 
 
-def _map_common(draw_method_name, arg_func, mode, cube, plot_defn,
-                *args, **kwargs):
-    """
-    Draw the given cube on a map using its points or bounds.
-
-    "Mode" parameter will switch functionality between POINT or BOUND plotting.
-
-
-    """
-    # Generate 2d x and 2d y grids.
+def _map_coords_and_points_common(mode, plot_defn):
+    """Get coordinates and coordinate points for a map plot."""
     y_coord, x_coord = plot_defn.coords
     if mode == iris.coords.POINT_MODE:
         if x_coord.ndim == y_coord.ndim == 1:
@@ -504,6 +542,20 @@ def _map_common(draw_method_name, arg_func, mode, cube, plot_defn,
             raise ValueError("Could not get XY grid from bounds. "
                              "X or Y coordinate doesn't have 2 bounds "
                              "per point.")
+    return x_coord, y_coord, x, y
+
+
+def _map_common(draw_method_name, arg_func, mode, cube, plot_defn,
+                *args, **kwargs):
+    """
+    Draw the given cube on a map using its points or bounds.
+
+    "Mode" parameter will switch functionality between POINT or BOUND plotting.
+
+
+    """
+    # Generate 2d x and 2d y grids.
+    x_coord, y_coord, x, y = _map_coords_and_points_common(mode, plot_defn)
 
     # Obtain the data array.
     data = cube.data
@@ -534,6 +586,62 @@ def _map_common(draw_method_name, arg_func, mode, cube, plot_defn,
 
     # Draw the contour lines/filled contours.
     return draw_method(*new_args, **kwargs)
+
+
+def _vector_map_common(draw_method_name, arg_func, mode, ucube, vcube,
+                       plot_defn, *args, **kwargs):
+    """Draw a vector quantity on a map."""
+    # Generate 2d x and 2d y grids.
+    x_coord, y_coord, x, y = _map_coords_and_points_common(mode, plot_defn)
+
+    # Obtain the data arrays.
+    udata = ucube.data
+    vdata = vcube.data
+    if plot_defn.transpose:
+        udata = udata.T
+        vdata = vdata.T
+
+    # Add a cyclic point for global data.
+    if getattr(x_coord, 'circular', False):
+        _, direction = iris.util.monotonic(x_coord.points,
+                                           return_direction=True)
+        y = np.append(y, y[:, 0:1], axis=1)
+        x = np.append(x, x[:, 0:1] + 360 * direction, axis=1)
+        udata = ma.concatenate([udata, udata[:, 0:1]], axis=1)
+        vdata = ma.concatenate([vdata, vdata[:, 0:1]], axis=1)
+
+    # Replace non-cartopy subplot/axes with a cartopy alternative and set the
+    # transform keyword.
+    draw_method, kwargs = _geoaxes_draw_method_and_kwargs(x_coord, y_coord,
+                                                          draw_method_name,
+                                                          kwargs)
+
+    if arg_func is not None:
+        new_args, kwargs = arg_func(x, y, udata, vdata, *args, **kwargs)
+    else:
+        new_args = (x, y, udata, vdata) + args
+
+    # Draw the vector based plot.
+    return draw_method(*new_args, **kwargs)
+
+
+def barbs(ucube, vcube, *args, **kwargs):
+    """
+    Draw a 2D field of barbs.
+
+    Kwargs:
+
+    * coords: list of :class:`~iris.coords.Coord` objects or coordinate names
+        Use the given coordinates as the axes for the plot. The order of the
+        given coordinates indicates which axis to use for each, where the first
+        element is the horizontal axis of the plot and the second element is
+        the vertical axis of the plot.
+
+    See :func:`matplotlib.pyplot.quiver` for details of other valid keyword
+    arguments.
+
+    """
+    return _draw_2d_vector('barbs', None, ucube, vcube, *args, **kwargs)
 
 
 def contour(cube, *args, **kwargs):
@@ -802,6 +910,25 @@ def points(cube, *args, **kwargs):
     _scatter_args = lambda u, v, data, *args, **kwargs: ((u, v) + args, kwargs)
     return _draw_2d_from_points('scatter', _scatter_args, cube,
                                 *args, **kwargs)
+
+
+def quiver(ucube, vcube, *args, **kwargs):
+    """
+    Draw a 2D field of arrows.
+
+    Kwargs:
+
+    * coords: list of :class:`~iris.coords.Coord` objects or coordinate names
+        Use the given coordinates as the axes for the plot. The order of the
+        given coordinates indicates which axis to use for each, where the first
+        element is the horizontal axis of the plot and the second element is
+        the vertical axis of the plot.
+
+    See :func:`matplotlib.pyplot.quiver` for details of other valid keyword
+    arguments.
+
+    """
+    return _draw_2d_vector('quiver', None, ucube, vcube, *args, **kwargs)
 
 
 def _1d_coords_deprecation_handler(func):
