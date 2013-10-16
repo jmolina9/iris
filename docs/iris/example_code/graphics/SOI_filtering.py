@@ -24,6 +24,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import iris
 import iris.plot as iplt
+from iris.coord_categorisation import add_season, add_season_year
 
 
 def low_pass_weights(window, cutoff):
@@ -57,33 +58,40 @@ def main():
     fname = iris.sample_data_path('SOI_Darwin.nc')
     soi = iris.load_cube(fname)
 
+    # Average into seasons DJF, MAM, JJA, SON.
+    add_season(soi, 'time', name='season')
+    add_season_year(soi, 'time', name='season_year')
+    soi = soi.aggregated_by(['season', 'season_year'], iris.analysis.MEAN)
+    soi.remove_coord('season')
+    soi.remove_coord('season_year')
+
     # Window length for filters.
     window = 121
 
-    # Construct 2-year (24-month) and 7-year (84-month) low pass filters
-    # for the SOI data which is monthly.
-    wgts24 = low_pass_weights(window, 1. / 24.) 
-    wgts84 = low_pass_weights(window, 1. / 84.)
+    # Construct 2-year (8 season) and 7-year (28 season) low pass filters
+    # for the SOI data which is seasonal 4 times per year.
+    wgts2 = low_pass_weights(window, 1. / 8.)
+    wgts7 = low_pass_weights(window, 1. / 24.)
 
     # Apply each filter using the rolling_window method used with the weights
     # keyword argument. A weighted sum is required because the magnitude of
     # the weights are just as important as their relative sizes.
-    soi24 = soi.rolling_window('time',
+    soi2 = soi.rolling_window('time',
+                              iris.analysis.SUM,
+                              len(wgts2),
+                              weights=wgts2)
+    soi7 =  soi.rolling_window('time',
                                iris.analysis.SUM,
-                               len(wgts24),
-                               weights=wgts24)
-    soi84 =  soi.rolling_window('time',
-                                iris.analysis.SUM,
-                                len(wgts84),
-                                weights=wgts84)
+                               len(wgts7),
+                               weights=wgts7)
 
     # Plot the SOI time series and both filtered versions.
     plt.figure(figsize=(9, 4))
     iplt.plot(soi, color='0.7', linewidth=1., linestyle='-',
               alpha=1., label='no filter')
-    iplt.plot(soi24, color='b', linewidth=2., linestyle='-',
+    iplt.plot(soi2, color='b', linewidth=2., linestyle='-',
               alpha=.7, label='2-year filter')
-    iplt.plot(soi84, color='r', linewidth=2., linestyle='-',
+    iplt.plot(soi7, color='r', linewidth=2., linestyle='-',
               alpha=.7, label='7-year filter')
     plt.ylim([-4, 4])
     plt.title('Southern Oscillation Index (Darwin Only)')
