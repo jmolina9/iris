@@ -32,6 +32,8 @@ import numpy as np
 
 import iris.exceptions
 
+from iris.util import broadcast_to_shape
+
 
 def _extract_relevant_cube_slice(cube, geometry):
     """
@@ -198,12 +200,20 @@ def geometry_area_weights(cube, geometry, normalize=False):
     subshape[y_dim] = suby_coord.shape[0]
     subx_bounds = subx_coord.bounds
     suby_bounds = suby_coord.bounds
-    subweights = np.empty(subshape, np.float32)
 
-    # calculate the area weights
-    for nd_index in np.ndindex(subweights.shape):
-        xi = nd_index[x_dim]
-        yi = nd_index[y_dim]
+    if x_dim != y_dim:
+        calculation_shape = (subx_coord.shape[0], suby_coord.shape[0])
+        xp = 0
+        yp = 1
+    else:
+        calculation_shape = (subx_coord.shape[0],)
+        xp = 0
+        yp = 0
+    subweights = np.empty(calculation_shape, np.float32)
+
+    for nd_index in np.ndindex(calculation_shape):
+        xi = nd_index[xp]
+        yi = nd_index[yp]
         x0, x1 = subx_bounds[xi]
         y0, y1 = suby_bounds[yi]
         polygon = Polygon([(x0, y0), (x0, y1), (x1, y1), (x1, y0)])
@@ -212,20 +222,21 @@ def geometry_area_weights(cube, geometry, normalize=False):
             subweights[nd_index] /= polygon.area
 
     # pad the calculated weights with zeros to match original cube shape
-    weights = np.zeros(shape, np.float32)
-    slices = []
-    for i in range(weights.ndim):
-        if i == x_dim:
-            slices.append(slice(x_min_ix, x_max_ix + 1))
-        elif i == y_dim:
-            slices.append(slice(y_min_ix, y_max_ix + 1))
-        else:
-            slices.append(slice(None))
+    if x_dim != y_dim:
+        real_shape = (shape[x_dim], shape[y_dim])
+        f_slicer = (slice(x_min_ix, x_max_ix + 1),
+                    slice(y_min_ix, y_max_ix + 1))
+    else:
+        real_shape = (shape[x_dim],)
+        f_slicer = slice(x_min_ix, x_max_ix + 1)
+    weights = np.zeros(real_shape, np.float32)
+    weights[f_slicer] = subweights
 
-    weights[slices] = subweights
+    # broadcast the 2D weights to the full cube shape:
+    if x_dim != y_dim:
+        dmap = (x_dim, y_dim)
+    else:
+        dmap = (x_dim, )
+    weights_full = broadcast_to_shape(weights, shape, dmap)
 
-    # Fix for the limitation of iris.analysis.MEAN weights handling.
-    # Broadcast the array to the full shape of the cube
-    weights = np.broadcast_arrays(weights, cube.data)[0]
-
-    return weights
+    return weights_full
