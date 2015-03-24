@@ -1104,8 +1104,8 @@ bound=(1994-12-01 00:00:00, 1998-12-01 00:00:00)
 
     def coords(self, name_or_coord=None, standard_name=None,
                long_name=None, var_name=None, attributes=None, axis=None,
-               contains_dimension=None, dimensions=None, coord=None,
-               coord_system=None, dim_coords=None, name=None):
+               contains_dimension=None, dimensions=None, coord_system=None,
+               dim_coords=None):
         """
         Return a list of coordinates in this cube fitting the given criteria.
 
@@ -1124,8 +1124,6 @@ bound=(1994-12-01 00:00:00, 1998-12-01 00:00:00)
             :class:`iris.coords.DimCoord`, :class:`iris.coords.AuxCoord`,
             :class:`iris.aux_factory.AuxCoordFactory`
             or :class:`iris.coords.CoordDefn`.
-        * name
-            .. deprecated:: 1.6. Please use the name_or_coord kwarg.
         * standard_name
             The CF standard name of the desired coordinate. If None, does not
             check for standard name.
@@ -1149,8 +1147,6 @@ bound=(1994-12-01 00:00:00, 1998-12-01 00:00:00)
             The exact data dimensions of the desired coordinate. Coordinates
             with no data dimension can be found with an empty tuple or list
             (i.e. ``()`` or ``[]``). If None, does not check for dimensions.
-        * coord
-            .. deprecated:: 1.6. Please use the name_or_coord kwarg.
         * coord_system
             Whether the desired coordinates have coordinate systems equal to
             the given coordinate system. If None, no check is done.
@@ -1163,23 +1159,6 @@ bound=(1994-12-01 00:00:00, 1998-12-01 00:00:00)
         See also :meth:`Cube.coord()<iris.cube.Cube.coord>`.
 
         """
-        # Handle deprecated kwargs
-        if name is not None:
-            name_or_coord = name
-            warnings.warn('the name kwarg is deprecated and will be removed '
-                          'in a future release. Consider converting '
-                          'existing code to use the name_or_coord '
-                          'kwarg as a replacement.',
-                          stacklevel=2)
-        if coord is not None:
-            name_or_coord = coord
-            warnings.warn('the coord kwarg is deprecated and will be removed '
-                          'in a future release. Consider converting '
-                          'existing code to use the name_or_coord '
-                          'kwarg as a replacement.',
-                          stacklevel=2)
-        # Finish handling deprecated kwargs
-
         name = None
         coord = None
 
@@ -1273,8 +1252,8 @@ bound=(1994-12-01 00:00:00, 1998-12-01 00:00:00)
 
     def coord(self, name_or_coord=None, standard_name=None,
               long_name=None, var_name=None, attributes=None, axis=None,
-              contains_dimension=None, dimensions=None, coord=None,
-              coord_system=None, dim_coords=None, name=None):
+              contains_dimension=None, dimensions=None, coord_system=None,
+              dim_coords=None):
         """
         Return a single coord given the same arguments as :meth:`Cube.coords`.
 
@@ -1290,23 +1269,6 @@ bound=(1994-12-01 00:00:00, 1998-12-01 00:00:00)
             documentation.
 
         """
-        # Handle deprecated kwargs
-        if name is not None:
-            name_or_coord = name
-            warnings.warn('the name kwarg is deprecated and will be removed '
-                          'in a future release. Consider converting '
-                          'existing code to use the name_or_coord '
-                          'kwarg as a replacement.',
-                          stacklevel=2)
-        if coord is not None:
-            name_or_coord = coord
-            warnings.warn('the coord kwarg is deprecated and will be removed '
-                          'in a future release. Consider converting '
-                          'existing code to use the name_or_coord '
-                          'kwarg as a replacement.',
-                          stacklevel=2)
-        # Finish handling deprecated kwargs
-
         coords = self.coords(name_or_coord=name_or_coord,
                              standard_name=standard_name,
                              long_name=long_name, var_name=var_name,
@@ -1322,8 +1284,11 @@ bound=(1994-12-01 00:00:00, 1998-12-01 00:00:00)
                                                              coord in coords))
             raise iris.exceptions.CoordinateNotFoundError(msg)
         elif len(coords) == 0:
-            bad_name = name or standard_name or long_name or \
-                (coord and coord.name()) or ''
+            _name = name_or_coord
+            if name_or_coord is not None:
+                if not isinstance(name_or_coord, basestring):
+                    _name = name_or_coord.name()
+            bad_name = _name or standard_name or long_name or ''
             msg = 'Expected to find exactly 1 %s coordinate, but found ' \
                   'none.' % bad_name
             raise iris.exceptions.CoordinateNotFoundError(msg)
