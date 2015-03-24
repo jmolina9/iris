@@ -1,4 +1,4 @@
-# (C) British Crown Copyright 2010 - 2014, Met Office
+# (C) British Crown Copyright 2010 - 2015, Met Office
 #
 # This file is part of Iris.
 #
@@ -486,11 +486,9 @@ class TestTimeTripleMerging(tests.IrisTest):
                                    ])
         cube = cubes.merge()[0]
         self.assertCML(cube, ('merge', 'time_triple_merging2.cml'), checksum=False)
-        self.assertIsNone(cube.assert_valid())
 
         cube = iris.cube.CubeList(cubes[:-1]).merge()[0]
         self.assertCML(cube, ('merge', 'time_triple_merging3.cml'), checksum=False)
-        self.assertIsNone(cube.assert_valid())
 
     def test_simple3(self):
         cubes = iris.cube.CubeList([
@@ -503,11 +501,9 @@ class TestTimeTripleMerging(tests.IrisTest):
                                    ])
         cube = cubes.merge()[0]
         self.assertCML(cube, ('merge', 'time_triple_merging4.cml'), checksum=False)
-        self.assertIsNone(cube.assert_valid())
 
         cube = iris.cube.CubeList(cubes[:-1]).merge()[0]
         self.assertCML(cube, ('merge', 'time_triple_merging5.cml'), checksum=False)
-        self.assertIsNone(cube.assert_valid())
 
 
 class TestCubeMergeTheoretical(tests.IrisTest):

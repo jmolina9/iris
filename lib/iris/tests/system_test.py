@@ -1,4 +1,4 @@
-# (C) British Crown Copyright 2010 - 2014, Met Office
+# (C) British Crown Copyright 2010 - 2015, Met Office
 #
 # This file is part of Iris.
 #
@@ -64,8 +64,6 @@ class SystemInitialTest(tests.IrisTest):
                                               'time', units=hours_since_epoch))
         cm.add_aux_coord(iris.coords.AuxCoord(np.array([99], 'i8'),
                                               long_name='pressure', units='Pa'))
-
-        cm.assert_valid()
 
         for filetype in ('.nc', '.pp', '.grib2'):
             saved_tmpfile = iris.util.create_temp_filename(suffix=filetype)
