@@ -69,6 +69,7 @@ FixedSurface = namedtuple('FixedSurface', ['standard_name',
 
 # Regulations 92.1.6.
 _GRID_ACCURACY_IN_DEGREES = 1e-6  # 1/1,000,000 of a degree
+_GRID_ACCURACY_IN_DEGREES_GRIB1 = 1e-3  # 1/1,000 of a degree
 
 # Reference Common Code Table C-1.
 _CENTRES = {
@@ -522,6 +523,51 @@ def grid_definition_template_0_and_1(section, metadata, y_name, x_name, cs):
     y_coord = DimCoord(y_points, standard_name=y_name, units='degrees',
                        coord_system=cs)
     x_coord = DimCoord(x_points, standard_name=x_name, units='degrees',
+                       coord_system=cs, circular=circular)
+
+    # Determine the lat/lon dimensions.
+    y_dim, x_dim = 0, 1
+    if scan.j_consecutive:
+        y_dim, x_dim = 1, 0
+
+    # Add the lat/lon coordinates to the metadata dim coords.
+    metadata['dim_coords_and_dims'].append((y_coord, y_dim))
+    metadata['dim_coords_and_dims'].append((x_coord, x_dim))
+
+
+def grid_definition_template_0_grib1(section, metadata):
+    # Earth assumed spherical with radius of 6 371 229.0m
+    cs = icoord_systems.GeogCS(6371229)
+
+    # Check for reduced grid.
+    if section['PLPresent']:
+        msg = 'Grid definition section 2 contains unsupported ' \
+            'quasi-regular grid'
+        raise TranslationError(msg)
+
+    scan = scanning_mode(section['scanningMode'])
+
+    # Calculate longitude points.
+    x_inc = section['iDirectionIncrement'] * _GRID_ACCURACY_IN_DEGREES_GRIB1
+    x_offset = section['longitudeOfFirstGridPoint'] * _GRID_ACCURACY_IN_DEGREES_GRIB1
+    x_direction = -1 if scan.i_negative else 1
+    Ni = section['Ni']
+    x_points = np.arange(Ni, dtype=np.float64) * x_inc * x_direction + x_offset
+
+    # Determine whether the x-points (in degrees) are circular.
+    circular = _is_circular(x_points, 360.0)
+
+    # Calculate latitude points.
+    y_inc = section['jDirectionIncrement'] * _GRID_ACCURACY_IN_DEGREES_GRIB1
+    y_offset = section['latitudeOfFirstGridPoint'] * _GRID_ACCURACY_IN_DEGREES_GRIB1
+    y_direction = 1 if scan.j_positive else -1
+    Nj = section['Nj']
+    y_points = np.arange(Nj, dtype=np.float64) * y_inc * y_direction + y_offset
+
+    # Create the lat/lon coordinates.
+    y_coord = DimCoord(y_points, standard_name='latitude', units='degrees',
+                       coord_system=cs)
+    x_coord = DimCoord(x_points, standard_name='longitude', units='degrees',
                        coord_system=cs, circular=circular)
 
     # Determine the lat/lon dimensions.
@@ -1099,6 +1145,15 @@ def grid_definition_template_90(section, metadata):
     # Add the X and Y coordinates to the metadata dim coords.
     metadata['dim_coords_and_dims'].append((y_coord, y_dim))
     metadata['dim_coords_and_dims'].append((x_coord, x_dim))
+
+
+def grid_definition_section_grib1(section, metadata):
+    template = section['dataRepresentationType']
+    if template == 0:
+        grid_definition_template_0_grib1(section, metadata)
+    else:
+        msg = 'Data representation type {} is not supported'.format(template)
+        raise TranslationError(msg)
 
 
 def grid_definition_section(section, metadata):
@@ -2034,6 +2089,16 @@ def bitmap_section(section):
 
 ###############################################################################
 
+def grib1_convert(field, metadata):
+    # Section 1 - Product Definition Section (PDS)
+    centre = _CENTRES.get(field.sections[1]['centre'])
+    if centre is not None:
+        metadata['attributes']['centre'] = centre
+
+    # Section 2 - Grid Definition Section (GDS)
+    grid_definition_section_grib1(field.sections[2], metadata)
+
+
 def grib2_convert(field, metadata):
     """
     Translate the GRIB2 message into the appropriate cube metadata.
@@ -2087,9 +2152,6 @@ def convert(field):
 
     """
     editionNumber = field.sections[0]['editionNumber']
-    if editionNumber != 2:
-        msg = 'GRIB edition {} is not supported'.format(editionNumber)
-        raise TranslationError(msg)
 
     # Initialise the cube metadata.
     metadata = OrderedDict()
@@ -2104,6 +2166,12 @@ def convert(field):
     metadata['aux_coords_and_dims'] = []
 
     # Convert GRIB2 message to cube metadata.
-    grib2_convert(field, metadata)
+    if editionNumber == 1:
+        grib1_convert(field, metadata)
+    elif editionNumber == 2:
+        grib2_convert(field, metadata)
+    else:
+        msg = 'GRIB edition {} is not supported'.format(editionNumber)
+        raise TranslationError(msg)
 
     return ConversionMetadata._make(metadata.values())

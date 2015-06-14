@@ -77,17 +77,20 @@ class _GribMessage(object):
     def sections(self):
         return self._raw_message.sections
 
-    @property
-    def data(self):
-        """
-        The data array from the GRIB message as a biggus Array.
+    def _grib1data(self, sections):
+        grid_section = sections[2]
+        template = grid_section['dataRepresentationType']
+        if template in (0,):
+            shape = (grid_section['Nj'], grid_section['Ni'])
+            proxy = _DataProxy(shape, np.dtype('f8'), np.nan,
+                               self._recreate_raw)
+            data = biggus.NumpyArrayAdapter(proxy)
+        else:
+            msg = 'Data representation type {} (GDS) is not supported'
+            raise TranslationError(msg.format(template))
+        return data
 
-        The shape of the array will match the logical shape of the
-        message's grid. For example, a simple global grid would be
-        available as a 2-dimensional array with shape (Nj, Ni).
-
-        """
-        sections = self.sections
+    def _grib2data(self, sections):
         grid_section = sections[3]
         if grid_section['sourceOfGridDefinition'] != 0:
             raise TranslationError(
@@ -121,6 +124,27 @@ class _GribMessage(object):
             fmt = 'Grid definition template {} is not supported'
             raise TranslationError(fmt.format(template))
         return data
+
+    @property
+    def data(self):
+        """
+        The data array from the GRIB message as a biggus Array.
+
+        The shape of the array will match the logical shape of the
+        message's grid. For example, a simple global grid would be
+        available as a 2-dimensional array with shape (Nj, Ni).
+
+        """
+        sections = self.sections
+        indicator_section = sections[0]
+        editionNumber = indicator_section['editionNumber']
+        if editionNumber == 1:
+            d = self._grib1data(sections)
+        elif editionNumber == 2:
+            d = self._grib2data(sections)
+        else:
+            raise TranslationError()
+        return d
 
 
 class _MessageLocation(namedtuple('_MessageLocation', 'filename offset')):
@@ -187,9 +211,20 @@ class _DataProxy(object):
         # is checked before this proxy is created.
         message = self.recreate_raw()
         sections = message.sections
-        bitmap_section = sections[6]
-        bitmap = self._bitmap(bitmap_section)
-        data = sections[7]['codedValues']
+        edition = sections[0]['editionNumber']
+        if edition == 1:
+            try:
+                bitmap_section = sections[3]
+            except KeyError:
+                bitmap = None
+            try:
+                data = sections[4]['codedValues']
+            except KeyError:
+                data = sections[4]['values']
+        else:
+            bitmap_section = sections[6]
+            bitmap = self._bitmap(bitmap_section)
+            data = sections[7]['codedValues']
 
         if bitmap is not None:
             # Note that bitmap and data are both 1D arrays at this point.
@@ -316,7 +351,13 @@ class _RawGribMessage(object):
             if key_match is not None:
                 new_section = int(key_match.group(1))
             elif key_name == '7777':
-                new_section = 8
+                # Should have had section 0 already so look in there for the
+                # appropriate section based on the edition.
+                editionNumber = sections[0]['editionNumber']
+                if editionNumber == 1:
+                    new_section = 5
+                else:
+                    new_section = 8
             if section != new_section:
                 sections[section] = _Section(self._message_id, section,
                                              section_keys)
@@ -367,7 +408,7 @@ class _Section(object):
         message.
 
         """
-        vector_keys = ('codedValues', 'pv', 'satelliteSeries',
+        vector_keys = ('values', 'codedValues', 'pv', 'satelliteSeries',
                        'satelliteNumber', 'instrumentType',
                        'scaleFactorOfCentralWaveNumber',
                        'scaledValueOfCentralWaveNumber',
