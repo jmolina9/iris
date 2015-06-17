@@ -1,0 +1,4 @@
+Could have used PDS Octet 8 to determine if the Bitmap section is included.
+Might want to use PDS Octet 8 to determine how to proceed if a GDS is not present.
+
+Consider the concept of a grid_type loader for determining grid metadata, would simplify a lot of parts and make grib1 and grib2 a unified interface (e.g. get the gridType key and dispatch to a grid type handling function instead of a template handler. We'd be using GRIBAPI to get most of the work done so no need to worry about scaling of degrees etc. Things like shape of earth could be handled easily by setting dud values for earth size parameters and checking shape of earth key which is present for both (returns 6 for grib1).
