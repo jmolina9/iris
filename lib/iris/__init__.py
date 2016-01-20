@@ -135,7 +135,8 @@ class Future(threading.local):
     """Run-time configuration controller."""
 
     def __init__(self, cell_datetime_objects=False, netcdf_promote=False,
-                 strict_grib_load=False, netcdf_no_unlimited=False):
+                 strict_grib_load=False, netcdf_no_unlimited=False,
+                 fault_tolerant_load=False):
         """
         A container for run-time options controls.
 
@@ -183,12 +184,15 @@ class Future(threading.local):
         self.__dict__['netcdf_promote'] = netcdf_promote
         self.__dict__['strict_grib_load'] = strict_grib_load
         self.__dict__['netcdf_no_unlimited'] = netcdf_no_unlimited
+        self.__dict__['fault_tolerant_load'] = fault_tolerant_load
 
     def __repr__(self):
         msg = ('Future(cell_datetime_objects={}, netcdf_promote={}, '
-               'strict_grib_load={}, netcdf_no_unlimited={})')
+               'strict_grib_load={}, netcdf_no_unlimited={}, '
+               'fault_tolerant_load={})')
         return msg.format(self.cell_datetime_objects, self.netcdf_promote,
-                          self.strict_grib_load, self.netcdf_no_unlimited)
+                          self.strict_grib_load, self.netcdf_no_unlimited,
+                          self.fault_tolerant_load)
 
     def __setattr__(self, name, value):
         if name not in self.__dict__:

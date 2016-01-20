@@ -779,10 +779,10 @@ def _ensure_aligned(regrid_cache, src_cube, target_cube):
 
 
 _loader_attrs = ('field_generator', 'field_generator_kwargs',
-                 'converter', 'legacy_custom_rules', 'fault_tolerant')
+                 'converter', 'legacy_custom_rules')
 class Loader(collections.namedtuple('Loader', _loader_attrs)):
     def __new__(cls, field_generator, field_generator_kwargs, converter,
-                legacy_custom_rules=None, fault_tolerant=False):
+                legacy_custom_rules=None):
         """
         Create a definition of a field-based Cube loader.
 
@@ -807,19 +807,12 @@ class Loader(collections.namedtuple('Loader', _loader_attrs)):
 
             .. deprecated:: 1.9
 
-        * fault_tolerant
-            If `True` then failure to translate an individual field will
-            not cause the load process to abort. If `False` the load process
-            will raise an exception if a single field cannot be translated.
-            Default is `False`.
-
         """
         if legacy_custom_rules is not None:
             warnings.warn('The `legacy_custom_rules` attribute is '
                           'deprecated.')
         return tuple.__new__(cls, (field_generator, field_generator_kwargs,
-                                   converter, legacy_custom_rules,
-                                   fault_tolerant))
+                                   converter, legacy_custom_rules))
 
 
 ConversionMetadata = collections.namedtuple('ConversionMetadata',
@@ -886,8 +879,12 @@ def load_cubes(filenames, user_callback, loader, filter_function=None):
                 cube, factories, references = _make_cube(field,
                                                          loader.converter)
             except iris.exceptions.TranslationError as e:
-                if loader.fault_tolerant:
-                    skipped_fields.append(str(e))
+                if iris.FUTURE.fault_tolerant_load:
+                    # More information about the specific field could be added
+                    # here perhaps, assuming FieldLoadFault were extended to
+                    # support it.
+                    skipped_fields.append(
+                        iris.exceptions.FieldLoadFault(filename, e))
                     continue
                 raise e
 
@@ -918,11 +915,10 @@ def load_cubes(filenames, user_callback, loader, filter_function=None):
                 yield cube
 
     if skipped_fields:
-        for sf in skipped_fields:
-            warnings.warn(sf, iris.exceptions.FieldLoadFault)
         msg = '{} fields could not be converted during load and were skipped'
-        warnings.warn(msg.format(len(skipped_fields)),
-                      iris.exceptions.FieldLoadFault)
+        warnings.warn(msg.format(len(skipped_fields)), UserWarning)
+        for fault_warning in skipped_fields:
+            warnings.warn(fault_warning)
 
     regrid_cache = {}
     for cube, factories in results_needing_reference:

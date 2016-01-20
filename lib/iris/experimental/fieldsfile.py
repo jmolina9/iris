@@ -1,4 +1,4 @@
-# (C) British Crown Copyright 2014 - 2016, Met Office
+# (C) British Crown Copyright 2014 - 2015, Met Office
 #
 # This file is part of Iris.
 #
@@ -123,8 +123,7 @@ def load(filenames, callback=None):
         erroneous results.
 
     """
-    loader = Loader(_collations_from_filename, {}, _convert_collation, None,
-                    False)
+    loader = Loader(_collations_from_filename, {}, _convert_collation, None)
     return CubeList(load_cubes(filenames, callback, loader, None))
 
 

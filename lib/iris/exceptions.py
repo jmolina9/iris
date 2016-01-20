@@ -155,4 +155,17 @@ class FieldLoadFault(Warning):
     a field it is attempting to load.
 
     """
-    pass
+
+    def __init__(self, filename, exception):
+        self.filename = filename
+        self.exception = exception
+
+    def __str__(self):
+        # For now just return the repr, could be a more verbose description,
+        # it is what gets printed when the warning is raised directly.
+        return repr(self)
+
+    def __repr__(self):
+        r = 'FieldLoadFault(filename={}, exception={!r})'.format(
+            self.filename, self.exception)
+        return r

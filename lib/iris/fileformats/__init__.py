@@ -1,4 +1,4 @@
-# (C) British Crown Copyright 2010 - 2015, Met Office
+# (C) British Crown Copyright 2010 - 2016, Met Office
 #
 # This file is part of Iris.
 #
@@ -22,6 +22,11 @@ A package for converting cubes to and from specific file formats.
 from __future__ import (absolute_import, division, print_function)
 from six.moves import (filter, input, map, range, zip)  # noqa
 
+import contextlib
+import sys
+import warnings
+
+from iris.exceptions import FieldLoadFault
 from iris.io.format_picker import (FileExtension, FormatAgent,
                                    FormatSpecification, MagicNumber,
                                    UriProtocol, LeadingLine)
@@ -197,3 +202,41 @@ FORMAT_AGENT.add_spec(FormatSpecification('ABF', FileExtension(), '.abf',
 
 FORMAT_AGENT.add_spec(FormatSpecification('ABL', FileExtension(), '.abl',
                                           abf.load_cubes, priority=3))
+
+
+@contextlib.contextmanager
+def catch_load_faults():
+    """
+    A context manager for catching :class:`iris.exceptions.FieldLoadFault`
+    warnings raised during the load process.
+
+    Doesn't always work properly. If a load is called without this, then another
+    with the context manager it doesn't return any fields. Why? Looks like Python
+    issue 4180 (http://bugs.python.org/issue4180), not sure there is anything
+    that can be done about this.
+
+    """
+    # A log of the FieldLoadFault warnings encountered within this
+    # context manager.
+    log = []
+    # Store a reference to the already defined showwarning function.
+    wmodule = sys.modules['warnings']
+    original_showwarning = wmodule.showwarning
+    original_filters = wmodule.filters[:]
+    wmodule.simplefilter('always', FieldLoadFault)
+
+    # Define a replacement showwarning function that logs FieldLoadFault
+    # warnings and shows all other warnings.
+    def showwarning(*args, **kwargs):
+        warning = args[0]
+        if isinstance(warning, FieldLoadFault):
+            log.append(args[0])
+        else:
+            original_showwarning(*args, **kwargs)
+
+    wmodule.showwarning = showwarning
+    # Yield to the code block within the context manager.
+    yield log
+    # Reset the warnings system to the previous behaviour.
+    wmodule.showwarning = original_showwarning
+    wmodule.filters = original_filters
