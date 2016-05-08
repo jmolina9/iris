@@ -1328,6 +1328,65 @@ def regular_step(coord):
     return avdiff.astype(coord.points.dtype)
 
 
+def gaussian_latitudes(n):
+    if abs(int(n)) != n:
+        raise ValueError('n must be a non-negative integer')
+    # Create the coefficients of the Legendre polynomial series and construct
+    # its companion matrix.
+    cs = np.array([0] * (2 * n) + [1], dtype=np.int)
+    cm = np.polynomial.legendre.legcompanion(cs)
+    # Compute the eigenvalues of the companion matrix (the roots of the
+    # Legendre series) taking advantage of the fact that the companion matrix
+    # is symmetric by definition.
+    roots = np.linalg.eigvalsh(cm)
+    roots.sort()
+    # Improve the roots by using one application of Newton's method, using the
+    # solved root as the initial guess.
+    fx = np.polynomial.legendre.legval(roots, cs)
+    fpx = np.polynomial.legendre.legval(roots, polynomial.legendre.legder(cs))
+    roots -= fx / fpx
+    # Convert the roots on the interval [-1, 1] to latitude values on the
+    # interval [-90, 90].
+    latitudes = np.rad2deg(np.arcsin(roots))
+    return latitudes
+
+
+def is_gaussian(coord):
+    """
+    Determine if the given coord is a regular Gaussian latitude coordinate.
+    
+    Args:
+    
+    * coord: :class:`iris.coords.Coord`
+        The coordinate to assess.
+    
+    .. note::
+    
+       This function can only return `True` if the coordinate is a *global*
+       Gaussian latitude coordinate.
+
+    """
+    # TODO: Can this be made to handle subsets of Gaussian latitudes?
+    #       Use a heuristic to determine the effective interval the points
+    #       are defined on (global is [-1, 1]) and then perhaps work out what
+    #       fraction of the full set this is to determine the number of points
+    #       in the full set? Sounds flaky but may be possible...
+    if coord.points.ndim != 1 or coord.points.shape[0] % 2:
+        # Gaussian latitude coordinates must be 1d and have an even number
+        # of points.
+        rval = False
+    else
+        n = coord.points.shape[0] // 2
+        reference_points = gaussian_latitudes(n)
+        if coord.points[0] > 0:
+            reference_points = reference_points[::-1]
+        if np.allclose(coord.points, reference_points):
+            rval = True
+        else:
+            rval = False
+    return rval
+
+
 def unify_time_units(cubes):
     """
     Performs an in-place conversion of the time units of all time coords in the
